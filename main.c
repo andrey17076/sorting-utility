@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <string.h>
 
 #define BUFSIZE 512
 
@@ -36,7 +37,34 @@ int copyfile(const char *sourse_file, const char *dist_file) {
         return (0);
 }
 
+
 int main(int argc, char const *argv[]) {
+
+    const char *utility_name = (char *) basename(argv[0]);
+    if (argc != 4) {
+        fprintf(stderr, "%s: Wrong number of arguments\n", utility_name);
+        return -1;
+    }
+
+    DIR *directory;
+    if ((directory = opendir(argv[1])) == NULL) {
+        printf("%s: %s: %s\n", utility_name, argv[1], strerror(errno));
+        return -1;
+    }
+
+    char sort_option = atoi(argv[2]);
+    if (sort_option != 1 && sort_option != 2) {
+        printf("%s: Wrong sorting option (Must be: 1 or 2)\n", utility_name);
+        return -1;
+    }
+
+    // struct dirent *dir_item;
+    // while (dir_item = readdir(directory)) {
+    //     if (dir_item->d_ino != 0)
+    //         printf("%s\n",dir_item->d_name);
+    // }
+    //
+    // closedir(directory);
 
     return 0;
 }
