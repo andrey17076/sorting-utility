@@ -9,11 +9,12 @@
 #define BUFSIZE 512
 
 typedef struct {
-    char *path;
-    char *name;
+    char path[PATH_MAX];
+    char name[FILENAME_MAX];
     int  size;
 } file_t;
 
+const char *utility_name;
 
 int (*cmpfunction)(file_t file1, file_t file2);
 
@@ -32,16 +33,17 @@ int copyfile(const char *sourse_file, const char *dist_file) {
 
     if ((sourse_f = open(sourse_file, O_RDONLY)) == -1)
         return (-1);
+
     if ((dist_f = open(dist_file, O_WRONLY|O_CREAT|O_TRUNC, 0777) == -1)) {
         close(sourse_f);
-        return (-2);
+        return (-1);
     }
 
     while ((bytes_number = read(sourse_f, buffer, BUFSIZE)) > 0) {
         if (write(dist_f, buffer, bytes_number) < bytes_number) {
             close(sourse_f);
             close(dist_f);
-            return (-3);
+            return (-1);
         }
     }
 
@@ -49,24 +51,48 @@ int copyfile(const char *sourse_file, const char *dist_file) {
     close(dist_f);
 
     if (bytes_number == -1)
-        return (-4);
+        return (-1);
     else
         return (0);
 }
 
-
-
-int main(int argc, char const *argv[]) {
-
-    const char *utility_name = (char *) basename(argv[0]);
-    if (argc != 4) {
-        fprintf(stderr, "%s: Wrong number of arguments\n", utility_name);
+int files_rec(const char *dir_name) {
+    DIR *directory;
+    if ((directory = opendir(dir_name)) == NULL) {
+        fprintf(stderr, "%s: %s: %s\n", utility_name, dir_name, strerror(errno));
         return -1;
     }
 
-    DIR *directory;
-    if ((directory = opendir(argv[1])) == NULL) {
-        printf("%s: %s: %s\n", utility_name, argv[1], strerror(errno));
+    struct dirent *dir_item;
+    struct stat statbuf;
+    chdir(dir_name);
+    while((dir_item = readdir(directory)) != NULL) {
+        stat(dir_item->d_name, &statbuf);
+        if(S_ISDIR(statbuf.st_mode)) {
+            if(strcmp(".", dir_item->d_name) == 0 ||
+                strcmp("..", dir_item->d_name) == 0)
+                continue;
+            files_rec(dir_item->d_name);
+        } else {
+            file_t file_tmp;
+            strcpy(file_tmp.name, dir_item->d_name);
+            char *full_path;
+            char buf[PATH_MAX + 1];
+            realpath(dir_item->d_name, buf);
+            strcpy(file_tmp.path, buf);
+            file_tmp.size = (int) statbuf.st_size;
+            printf("%s %s %d\n", file_tmp.path, file_tmp.name, file_tmp.size);
+        }
+    }
+    chdir("..");
+    closedir(directory);
+}
+
+int main(int argc, char const *argv[]) {
+
+    utility_name = (char *) basename(argv[0]);
+    if (argc != 4) {
+        fprintf(stderr, "%s: Wrong number of arguments\n", utility_name);
         return -1;
     }
 
@@ -81,13 +107,8 @@ int main(int argc, char const *argv[]) {
     else if(sort_option == 2)
         cmpfunction = cmpsize;
 
-    // struct dirent *dir_item;
-    // while (dir_item = readdir(directory)) {
-    //     if (dir_item->d_ino != 0)
-    //         printf("%s\n",dir_item->d_name);
-    // }
-    //
-    // closedir(directory);
+    file_t *files;
+    files_rec(argv[1]);
 
     return 0;
 }
