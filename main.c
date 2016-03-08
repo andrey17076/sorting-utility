@@ -8,6 +8,23 @@
 
 #define BUFSIZE 512
 
+typedef struct {
+    char *path;
+    char *name;
+    int  size;
+} file_t;
+
+
+int (*cmpfunction)(file_t file1, file_t file2);
+
+int cmpname(file_t file1, file_t file2) {
+    return strcmp(file1.name, file2.name);
+}
+
+int cmpsize(file_t file1, file_t file2) {
+    return file1.size - file2.size;
+}
+
 int copyfile(const char *sourse_file, const char *dist_file) {
     int sourse_f, dist_f;
     ssize_t bytes_number;
@@ -38,6 +55,7 @@ int copyfile(const char *sourse_file, const char *dist_file) {
 }
 
 
+
 int main(int argc, char const *argv[]) {
 
     const char *utility_name = (char *) basename(argv[0]);
@@ -57,6 +75,11 @@ int main(int argc, char const *argv[]) {
         printf("%s: Wrong sorting option (Must be: 1 or 2)\n", utility_name);
         return -1;
     }
+
+    if (sort_option == 1)
+        cmpfunction = cmpname;
+    else if(sort_option == 2)
+        cmpfunction = cmpsize;
 
     // struct dirent *dir_item;
     // while (dir_item = readdir(directory)) {
