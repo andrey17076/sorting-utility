@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define BUFSIZE 512
 
@@ -14,16 +15,18 @@ typedef struct {
     int  size;
 } file_t;
 
-const char *utility_name;
+const char *utility_name = NULL;
+file_t *file_list = NULL;
+int file_list_length = 0;
 
-int (*cmpfunction)(file_t file1, file_t file2);
+int (*cmpfunction)(file_t file1, file_t file2) = NULL;
 
 int cmpname(file_t file1, file_t file2) {
-    return strcmp(file1.name, file2.name);
+    return (strcmp(file1.name, file2.name) > 0);
 }
 
 int cmpsize(file_t file1, file_t file2) {
-    return file1.size - file2.size;
+    return ((file1.size - file2.size) < 0);
 }
 
 int copyfile(const char *sourse_file, const char *dist_file) {
@@ -76,12 +79,12 @@ int files_rec(const char *dir_name) {
         } else {
             file_t file_tmp;
             strcpy(file_tmp.name, dir_item->d_name);
-            char *full_path;
             char buf[PATH_MAX + 1];
             realpath(dir_item->d_name, buf);
             strcpy(file_tmp.path, buf);
             file_tmp.size = (int) statbuf.st_size;
-            printf("%s %s %d\n", file_tmp.path, file_tmp.name, file_tmp.size);
+            file_list = realloc(file_list, (++file_list_length)*sizeof(file_t));
+            file_list[file_list_length - 1] = file_tmp;
         }
     }
     chdir("..");
@@ -107,8 +110,23 @@ int main(int argc, char const *argv[]) {
     else if(sort_option == 2)
         cmpfunction = cmpsize;
 
-    file_t *files;
     files_rec(argv[1]);
+    int i, j;
+    file_t file_tmp;
+
+    for (i = 0; i < file_list_length; i++) {
+        for (j = 0; j < file_list_length - i - 1; j++) {
+            if (cmpfunction(file_list[j], file_list[j+1])) {
+                file_tmp = file_list[j];
+                file_list[j] = file_list[j+1];
+                file_list[j+1] = file_tmp;
+            }
+        }
+    }
+
+    for(i = 0; i < file_list_length; i++) {
+        printf("%s %d\n", file_list[i].name, file_list[i].size);
+    }
 
     return 0;
 }
