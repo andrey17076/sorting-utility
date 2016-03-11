@@ -13,11 +13,11 @@ typedef struct {
     int  size;
 } file_t;
 
-char utility_name[FILENAME_MAX];
-file_t *file_list;
-int file_list_length = 0;
+char util_name[FILENAME_MAX];
+file_t *f_list;
+int f_list_len = 0;
 
-int (*cmpfunction)(file_t file1, file_t file2);
+int (*cmpfunc)(file_t file1, file_t file2);
 
 int cmpname(file_t file1, file_t file2) {
     return (strcmp(file1.name, file2.name) > 0);
@@ -27,11 +27,17 @@ int cmpsize(file_t file1, file_t file2) {
     return ((file1.size - file2.size) < 0);
 }
 
-int filesrec(const char *dir_name) {
+char* slshamnd(char* path) {
+    if (path[strlen(path) - 1] != '/')
+        strcat(path, "/");
+    return path;
+}
+
+int dirpass(const char *dir_name) {
     DIR *directory;
 
     if (!(directory = opendir(dir_name))) {
-        fprintf(stderr, "%s: %s: %s\n", utility_name, dir_name, strerror(errno));
+        fprintf(stderr, "%s: %s: %s\n", util_name, dir_name, strerror(errno));
         return -1;
     }
 
@@ -43,79 +49,84 @@ int filesrec(const char *dir_name) {
         if(strcmp(".", dir_item->d_name) == 0 ||
             strcmp("..", dir_item->d_name) == 0)
             continue;
-
         struct stat statbuf;
-        stat(next_item, &statbuf);
+        lstat(next_item, &statbuf);
         if(S_ISDIR(statbuf.st_mode)) {
-            filesrec(next_item);
-        } else {
+            dirpass(slshamnd(next_item));
+        } else if(S_ISREG(statbuf.st_mode)) {
             file_t file_tmp;
             strcpy(file_tmp.name, dir_item->d_name);
             strcpy(file_tmp.path, next_item);
             file_tmp.size = (int) statbuf.st_size;
-            file_list = realloc(file_list, (++file_list_length)*sizeof(file_t));
-            file_list[file_list_length - 1] = file_tmp;
+            f_list = realloc(f_list, (++f_list_len)*sizeof(file_t));
+            f_list[f_list_len - 1] = file_tmp;
         }
     }
     closedir(directory);
 }
 
-int main(int argc, char const *argv[]) {
-    strcpy(utility_name, (char*) basename(argv[0]));
-
-    if (argc != 4) {
-        fprintf(stderr, "%s: Wrong number of arguments\n", utility_name);
-        return -1;
-    }
-
-    char dist_dir[PATH_MAX];
-    realpath(argv[3], dist_dir);
-    //if (dist_dir[strlen(dist_dir) - 1] != '/')
-    //    strcat(dist_dir, "/");
-
-    char sort_option = atoi(argv[2]);
-    if (sort_option != 1 && sort_option != 2) {
-        fprintf(stderr,"%s: Wrong sorting option (Must be: 1 or 2)\n", utility_name);
-        return -1;
-    } else if (sort_option == 1)
-        cmpfunction = cmpname;
+void flistsort(int sort_opt){
+    if (sort_opt == 1)
+        cmpfunc = cmpname;
     else
-        cmpfunction = cmpsize;
-
-    filesrec(argv[1]);
+        cmpfunc = cmpsize;
 
     int i, j;
-    for (i = 0; i < file_list_length; i++) {
-        for (j = 0; j < file_list_length - i - 1; j++) {
-            if (cmpfunction(file_list[j], file_list[j+1])) {
-                file_t file_tmp = file_list[j];
-                file_list[j] = file_list[j+1];
-                file_list[j+1] = file_tmp;
+    for (i = 0; i < f_list_len; i++) {
+        for (j = 0; j < f_list_len - i - 1; j++) {
+            if (cmpfunc(f_list[j], f_list[j+1])) {
+                file_t file_tmp = f_list[j];
+                f_list[j] = f_list[j+1];
+                f_list[j+1] = file_tmp;
             }
         }
     }
+}
 
+int main(int argc, char const *argv[]) {
+    strcpy(util_name, (char*) basename(argv[0]));
 
-    if ((mkdir(dist_dir, 0777) == -1) && (errno == EACCES)) {
-        fprintf(stderr, "%s: %s: %s\n", utility_name, dist_dir, strerror(errno));
+    if (argc != 4) {
+        fprintf(stderr, "%s: Wrong number of arguments\n", util_name);
         return -1;
-    };
-
-    char dist_file[PATH_MAX + 1];
-    for(i = 0; i < file_list_length; i++) {
-        j = i;
-        while ((++j < file_list_length)&&(!strcmp(file_list[i].name, file_list[j].name))) {
-            char add_index[5];
-            sprintf(add_index," (%d)", j-i);
-            strcat(file_list[j].name, add_index);
-        }
-        strcpy(dist_file, dist_dir);
-        strcat(dist_file, file_list[i].name);
-        //printf("%s\n", dist_file);
-        // if (symlink(file_list[i].path, dist_file) != -1) {
-        //     fprintf(stderr, "%s: %s: %s\n", utility_name, dist_file, strerror(errno));
-        // };
     }
 
+    char dist_path[PATH_MAX];
+    realpath(argv[3], dist_path);
+    slshamnd(dist_path);
+
+    char sort_opt = atoi(argv[2]);
+    if (sort_opt != 1 && sort_opt != 2) {
+        fprintf(stderr,"%s: Wrong sort option (Must be: 1 or 2)\n", util_name);
+        return -1;
+    }
+
+    char initdir[PATH_MAX];
+    strcpy(initdir, argv[1]);
+    dirpass(slshamnd(initdir));
+
+    flistsort(sort_opt);
+
+    if (mkdir(dist_path, 0777) == -1 && errno != EEXIST) {
+        fprintf(stderr, "%s: %s: %s\n", util_name, dist_path, strerror(errno));
+        return -1;
+    }
+
+    int i, j;
+    for(i = 0; i < f_list_len; i++) {
+        j = i;
+        while (j++ < f_list_len &&!strcmp(f_list[i].name, f_list[j].name)) {
+            char add_index[5];
+            sprintf(add_index," (%d)", j-i);
+            strcat(f_list[j].name, add_index);
+        }
+
+        char dist_file[PATH_MAX + 1];
+        strcpy(dist_file, dist_path);
+        strcat(dist_file, f_list[i].name);
+        if (symlink(f_list[i].path, dist_file) == -1) {
+           fprintf(stderr, "%s: %s: %s\n", util_name, dist_file, strerror(errno));
+        };
+    }
     return 0;
 }
